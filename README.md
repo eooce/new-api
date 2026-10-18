@@ -1,3 +1,20 @@
+## new-api
+
+### 一键部署脚本
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/eooce/new-api/main/deploy.sh)
+```
+---
+### 一键卸载脚本
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/eooce/new-api/main/deploy.sh) -u
+```
+
+---
+
+<details>
+<summary>原项目说明文档（点击展开）</summary>
+
 <div align="center">
 
 ![new-api](/web/public/logo.png)
@@ -359,3 +376,5 @@ If this project is helpful to you, welcome to give us a ⭐️ Star！
 <sub>Built with ❤️ by QuantumNous</sub>
 
 </div>
+
+</details>
