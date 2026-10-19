@@ -1,6 +1,10 @@
 ## new-api
+统一 API 网关，智能调度ai大模型
+---
+视频教程:  https://youtu.be/XCEPaMzwQAc
 
 ### 一键部署脚本
+* 可以在脚本前带PORT=指定端口变量，任意端口运行
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/eooce/new-api/main/deploy.sh)
 ```
