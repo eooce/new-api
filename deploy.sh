@@ -2,10 +2,10 @@
 set -euo pipefail
 
 # ================== 配置区 ==================
-INSTALL_DIR="/opt/new-api"
-SERVICE_NAME="new-api"
-SERVICE_PORT="3000"
-RUN_USER="root"
+export INSTALL_DIR=${INSTALL_DIR:-'/opt/new-api'} 
+export SERVICE_NAME=${SERVICE_NAME:-'new-api'} 
+export SERVICE_PORT=${SERVICE_PORT:-'3000'} 
+export RUN_USER=${RUN_USER:-'root'} 
 
 URL_AMD64="https://github.com/QuantumNous/new-api/releases/latest/download/new-api-v1.0.0-rc.45"
 URL_ARM64="https://github.com/QuantumNous/new-api/releases/latest/download/new-api-arm64-v1.0.0-rc.45"
