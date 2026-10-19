@@ -4,9 +4,13 @@
 视频教程:  https://youtu.be/XCEPaMzwQAc
 
 ### 一键部署脚本
-* 可以在脚本前带SERVICE_PORT=指定端口变量 放在脚本前运行，指定任意端口运行
+* 可以在脚本前带SERVICE_PORT=指定端口变量 放在脚本前运行，指定任意端口运行，默认3000
 ```bash
 bash <(curl -Ls https://raw.githubusercontent.com/eooce/new-api/main/deploy.sh)
+```
+* 指定端口
+```bash
+SERVICE_PORT=8080 bash <(curl -Ls https://raw.githubusercontent.com/eooce/new-api/main/deploy.sh)
 ```
 ---
 ### 一键卸载脚本
