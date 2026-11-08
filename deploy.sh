@@ -7,8 +7,9 @@ export SERVICE_NAME=${SERVICE_NAME:-'new-api'}
 export SERVICE_PORT=${SERVICE_PORT:-'3000'} 
 export RUN_USER=${RUN_USER:-'root'} 
 
-URL_AMD64="https://github.com/QuantumNous/new-api/releases/latest/download/new-api-v1.0.0-rc.45"
-URL_ARM64="https://github.com/QuantumNous/new-api/releases/latest/download/new-api-arm64-v1.0.0-rc.45"
+GITHUB_REPO="QuantumNous/new-api"
+RELEASE_API="https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=1"
+DOWNLOAD_BASE="https://github.com/${GITHUB_REPO}/releases/download"
 # ============================================
 
 usage() {
@@ -39,15 +40,62 @@ get_public_ip() {
     echo "$public_ip"
 }
 
+### 请求 GitHub Release API，返回 JSON
+get_latest_release_json() {
+    local json=""
+    if command -v curl &>/dev/null; then
+        local curl_args=(-fsSL --max-time 10 -H "Accept: application/vnd.github+json")
+        [[ -n "${GITHUB_TOKEN:-}" ]] && curl_args+=(-H "Authorization: Bearer ${GITHUB_TOKEN}")
+        json=$(curl "${curl_args[@]}" "$RELEASE_API" 2>/dev/null || true)
+    elif command -v wget &>/dev/null; then
+        local wget_args=(-qO- --timeout=10 --header="Accept: application/vnd.github+json")
+        [[ -n "${GITHUB_TOKEN:-}" ]] && wget_args+=(--header="Authorization: Bearer ${GITHUB_TOKEN}")
+        json=$(wget "${wget_args[@]}" "$RELEASE_API" 2>/dev/null || true)
+    else
+        echo "[ERROR] 系统未安装 curl 或 wget，无法获取版本信息。" >&2
+        exit 1
+    fi
+    printf '%s' "$json"
+}
+
+### 从 API 返回的 JSON 中提取 tag_name（如 v1.0.0-rc.48）
+extract_tag() {
+    local json="$1" tag=""
+    if command -v jq &>/dev/null; then
+        tag=$(printf '%s' "$json" \
+            | jq -r 'if type=="array" then (.[0].tag_name // empty) else (.tag_name // empty) end' \
+            2>/dev/null || true)
+    else
+        tag=$(printf '%s' "$json" \
+            | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' \
+            | head -n1 \
+            | sed 's/.*"\([^"]*\)"$/\1/' \
+            2>/dev/null || true)
+    fi
+    printf '%s' "$tag"
+}
+
 ### 安装 / 更新
 install_new_api() {
     local arch
     arch=$(uname -m)
     local download_url
 
+    echo "[INFO] 正在获取 new-api 最新版本..."
+    local api_json version
+    api_json=$(get_latest_release_json)
+    version=$(extract_tag "$api_json")
+    if [[ -z "$version" ]]; then
+        echo "[ERROR] 获取最新版本失败，可能是网络问题或 GitHub API 限流。"
+        echo "        可设置 GITHUB_TOKEN 环境变量后重试，例如:"
+        echo "        export GITHUB_TOKEN=ghp_xxx && bash $0"
+        exit 1
+    fi
+    echo "[INFO] 最新版本: $version"
+
     case "$arch" in
-        x86_64) download_url="$URL_AMD64" ;;
-        aarch64|arm64) download_url="$URL_ARM64" ;;
+        x86_64) download_url="${DOWNLOAD_BASE}/${version}/new-api-${version}" ;;
+        aarch64|arm64) download_url="${DOWNLOAD_BASE}/${version}/new-api-arm64-${version}" ;;
         *) echo "[ERROR] 不支持的架构: $arch（仅支持 x86_64 / aarch64）"; exit 1 ;;
     esac
 
@@ -100,7 +148,7 @@ EOF
     public_ip=$(get_public_ip)
     echo ""
     echo "====================================================="
-    echo "  New API 部署成功！"
+    echo "  New API 部署成功！(版本: ${version})"
     echo "  访问地址: http://${public_ip}:${SERVICE_PORT}"
     echo "  服务管理: systemctl status ${SERVICE_NAME}"
     echo "  数据目录: ${INSTALL_DIR}/data"
@@ -110,16 +158,14 @@ EOF
     echo "====================================================="
 }
 
-### 卸载（修复：无条件 stop/disable + 多路径清理 + 残留进程处理）
+### 卸载
 uninstall() {
     echo "[INFO] 开始卸载 ${SERVICE_NAME} ..."
 
-    # 1. 无条件停止并禁用服务（失败不中断）
     echo "[INFO] 停止并禁用服务 ${SERVICE_NAME} ..."
     systemctl stop "$SERVICE_NAME" 2>/dev/null || true
     systemctl disable "$SERVICE_NAME" 2>/dev/null || true
 
-    # 确认是否真的停了
     if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
         echo "[WARN] 服务仍在运行，发送 SIGKILL ..."
         systemctl kill -s SIGKILL "$SERVICE_NAME" 2>/dev/null || true
@@ -127,7 +173,6 @@ uninstall() {
     fi
     echo "[OK] 服务已停止并禁用"
 
-    # 2. 删除所有可能的 unit 文件位置
     local removed=false
     for f in \
         "/etc/systemd/system/${SERVICE_NAME}.service" \
@@ -146,14 +191,12 @@ uninstall() {
     systemctl daemon-reload
     systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
 
-    # 3. 清理可能残留的进程
     if pgrep -f "${INSTALL_DIR}/new-api" &>/dev/null; then
         echo "[WARN] 检测到残留进程，正在结束..."
         pkill -f "${INSTALL_DIR}/new-api" || true
         sleep 1
     fi
 
-    # 4. 询问是否删除安装目录
     if [[ -d "$INSTALL_DIR" ]]; then
         local ans="n"
         if [[ -t 0 ]]; then
